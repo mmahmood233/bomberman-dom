@@ -1,0 +1,26 @@
+/* Font consistency fix for cross-browser compatibility */
+/* This ensures that special characters and symbols render consistently across browsers */
+
+/* Apply to all elements */
+* {
+  /* Use standard web-safe fonts and disable emoji fonts */
+  font-family: 'Plus Jakarta Sans', Arial, Helvetica, sans-serif !important;
+  /* Prevent browsers from using emoji fonts for special characters */
+  font-variant-emoji: none;
+}
+
+/* Specific fix for player elements and game UI */
+.player, .player-name, .bomb, .explosion, .game-ui {
+  /* Ensure consistent rendering of game elements */
+  font-family: 'Plus Jakarta Sans', Arial, Helvetica, sans-serif !important;
+  /* Use text instead of emoji/symbols */
+  font-variant: normal;
+}
+
+/* Fix for Firefox specific rendering issues */
+@-moz-document url-prefix() {
+  * {
+    /* Force Firefox to use standard fonts */
+    font-family: 'Plus Jakarta Sans', Arial, Helvetica, sans-serif !important;
+  }
+}

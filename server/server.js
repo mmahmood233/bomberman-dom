@@ -273,8 +273,10 @@ io.on('connection', (socket) => {
   socket.on('drop_bomb', (data) => {
     if (!gameState.players[socket.id]) return;
     
-    // Create unique bomb ID
-    const bombId = `bomb_${socket.id}_${Date.now()}`;
+    // Use the client-provided bombId if available, otherwise create one
+    const bombId = data.bombId || `bomb_${socket.id}_${Date.now()}`;
+    
+    console.log('Received bomb placement with data:', data);
     
     // Add bomb to game state
     gameState.bombs[bombId] = {
@@ -291,7 +293,9 @@ io.on('connection', (socket) => {
     io.emit('drop_bomb', {
       bombId,
       playerId: socket.id,
+      ownerId: socket.id, // Add ownerId explicitly for client-side consistency
       x: data.x,
+      y: data.y, // Make sure y coordinate is included
       explosionRange: gameState.bombs[bombId].explosionRange,
       nickname: gameState.players[socket.id].nickname
     });

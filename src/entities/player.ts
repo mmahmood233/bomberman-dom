@@ -788,8 +788,8 @@ export class Player {
       const currentTime = performance.now();
       pressedKeys[event.key] = currentTime;
       
-      // Handle spacebar for bomb placement separately
-      if (event.key === ' ') {
+      // Handle 'a' key for bomb placement separately
+      if (event.key === 'a') {
         this.placeBomb();
       }
     };
@@ -1530,19 +1530,25 @@ export class Player {
       this.bombCooldown = false;
     }, this.bombCooldownTime);
     
+    // Generate a unique bomb ID
+    const bombId = `${this.id}-${gridX}-${gridY}-${Date.now()}`;
+    
     // Send bomb placement to server
     sendToServer(EVENTS.DROP_BOMB, {
+      ownerId: this.id,
       x: gridX,
       y: gridY,
-      explosionRange: this.explosionRange
+      explosionRange: this.explosionRange,
+      bombId: bombId
     });
     
     // Emit bomb placed event
     eventBus.emit('bomb:placed', {
-      playerId: this.id,
+      ownerId: this.id,
       x: gridX,
       y: gridY,
-      range: this.explosionRange
+      range: this.explosionRange,
+      bombId: bombId
     });
     
     // Explode after 2 seconds

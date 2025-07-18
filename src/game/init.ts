@@ -594,15 +594,19 @@ function startGame(container: HTMLElement, gameData?: any) {
   eventBus.on('remote:bomb:dropped', (data) => {
     console.log('Remote bomb placement:', data);
     
-    // Skip if this is the local player's bomb
-    if (data.playerId === localStorage.getItem('playerId')) {
-      return;
-    }
+    // We no longer skip local player bombs to ensure they're visible on all screens
+    // Instead, we'll create the bomb DOM element for all bombs received from the server
     
     // Get map container
     const mapContainer = getMapContainer();
     if (!mapContainer) {
       console.error('Map container not found for remote bomb placement');
+      return;
+    }
+    
+    // Ensure we have both x and y coordinates
+    if (data.x === undefined || data.y === undefined) {
+      console.error('Missing coordinates for bomb placement:', data);
       return;
     }
     
@@ -624,6 +628,10 @@ function startGame(container: HTMLElement, gameData?: any) {
       box-sizing: border-box;
     `;
     
+    // Debug info
+    console.log(`Creating bomb at position: (${data.x}, ${data.y}) with ID: ${bomb.id}`);
+    console.log(`Bomb position in pixels: left=${data.x * TILE_SIZE}px, top=${data.y * TILE_SIZE}px`);
+    
     // Add a fuse to make the bomb more visible
     const fuse = document.createElement('div');
     fuse.style.cssText = `
@@ -643,6 +651,110 @@ function startGame(container: HTMLElement, gameData?: any) {
     
     console.log(`Created remote bomb at ${data.x},${data.y} with range ${data.explosionRange}`);
     
+    // Get the player number from the data (1-based index)
+    // The server sends playerId which is the socket ID, but we need the player number (1, 2, 3, 4)
+    const ownerId = data.ownerId || data.playerId;
+    console.log(`Bomb owner ID: ${ownerId}`);
+    
+    // Find all players in the game
+    const allPlayers = document.querySelectorAll('.player');
+    console.log(`Found ${allPlayers.length} player elements`);
+    
+    // Log all player elements and their positions for debugging
+    allPlayers.forEach((el, index) => {
+      const style = window.getComputedStyle(el as HTMLElement);
+      const left = parseInt(style.left, 10) || 0;
+      const top = parseInt(style.top, 10) || 0;
+      console.log(`Player ${index}: id=${el.id}, position=(${left/TILE_SIZE}, ${top/TILE_SIZE})`);
+    });
+    
+    // Default to bomb position (fallback)
+    let playerX = data.x;
+    let playerY = data.y;
+    let playerFound = false;
+    
+    // Try to find the player by ID first
+    let playerElement = document.getElementById(`player-${ownerId}`);
+    
+    if (playerElement) {
+      // Get position from style (player elements use style.left and style.top)
+      const style = window.getComputedStyle(playerElement);
+      const left = parseInt(style.left, 10) || 0;
+      const top = parseInt(style.top, 10) || 0;
+      
+      // Convert from pixels to grid coordinates
+      playerX = left / TILE_SIZE;
+      playerY = top / TILE_SIZE;
+      playerFound = true;
+      console.log(`Found player element by ID at position: (${playerX}, ${playerY})`);
+    } 
+    // If not found by ID, try to find by player number or position in the DOM
+    else {
+      // Get the player number from localStorage
+      const localPlayerId = localStorage.getItem('playerId');
+      const localPlayerNumber = parseInt(localStorage.getItem('playerNumber') || '1');
+      
+      // Get all player elements as an array for easier processing
+      const playerElements = Array.from(allPlayers) as HTMLElement[];
+      
+      // Sort players by distance to the bomb position
+      // This helps ensure we get the most likely player who placed the bomb
+      const sortedPlayers = playerElements.sort((a, b) => {
+        const aStyle = window.getComputedStyle(a);
+        const bStyle = window.getComputedStyle(b);
+        
+        const aLeft = parseInt(aStyle.left, 10) / TILE_SIZE || 0;
+        const aTop = parseInt(aStyle.top, 10) / TILE_SIZE || 0;
+        const bLeft = parseInt(bStyle.left, 10) / TILE_SIZE || 0;
+        const bTop = parseInt(bStyle.top, 10) / TILE_SIZE || 0;
+        
+        const aDistance = Math.sqrt(Math.pow(aLeft - data.x, 2) + Math.pow(aTop - data.y, 2));
+        const bDistance = Math.sqrt(Math.pow(bLeft - data.x, 2) + Math.pow(bTop - data.y, 2));
+        
+        return aDistance - bDistance;
+      });
+      
+      // If this is our own bomb, use our own player's position
+      if (ownerId === localPlayerId) {
+        // Find our player element
+        const ourPlayer = document.querySelector(`.player[id$="${localPlayerId}"]`) as HTMLElement;
+        if (ourPlayer) {
+          const style = window.getComputedStyle(ourPlayer);
+          const left = parseInt(style.left, 10) || 0;
+          const top = parseInt(style.top, 10) || 0;
+          playerX = left / TILE_SIZE;
+          playerY = top / TILE_SIZE;
+          playerFound = true;
+          console.log(`Using local player position: (${playerX}, ${playerY})`);
+        }
+      } 
+      // Otherwise, use the closest player to the bomb position
+      else if (sortedPlayers.length > 0) {
+        const closestPlayer = sortedPlayers[0];
+        const style = window.getComputedStyle(closestPlayer);
+        const left = parseInt(style.left, 10) || 0;
+        const top = parseInt(style.top, 10) || 0;
+        playerX = left / TILE_SIZE;
+        playerY = top / TILE_SIZE;
+        playerFound = true;
+        console.log(`Using closest player to bomb: ${closestPlayer.id} at position (${playerX}, ${playerY})`);
+      }
+    }
+    
+    if (!playerFound) {
+      console.warn(`No player element found for bomb animation, using bomb position: (${playerX}, ${playerY})`);
+    }
+    
+    // Emit the bomb:thrown event to trigger animation
+    eventBus.emit('bomb:thrown', {
+      ownerId: ownerId,
+      playerX: playerX,
+      playerY: playerY,
+      bombX: data.x,
+      bombY: data.y,
+      bombId: data.bombId
+    });
+    
     // Remove bomb after 2 seconds (matching server timeout)
     setTimeout(() => {
       bomb.remove();
@@ -653,11 +765,8 @@ function startGame(container: HTMLElement, gameData?: any) {
   eventBus.on('remote:bomb:explode', (data) => {
     console.log('Remote bomb explosion:', data);
     
-    // Skip if this is the local player's bomb (it will be handled by the local player's code)
-    if (data.ownerId === localStorage.getItem('playerId')) {
-      console.log('Skipping local player bomb explosion');
-      return;
-    }
+    // We no longer skip local player bomb explosions to ensure they're visible on all screens
+    // This ensures consistent explosion rendering across all clients
     
     // Get map container
     const mapContainer = getMapContainer();

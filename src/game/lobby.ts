@@ -960,7 +960,6 @@ function createChatButton(): void {
     height: 350px !important;
     background-color: rgba(0, 0, 0, 0.85) !important;
     border-radius: 8px !important;
-    color: white !important;
     display: flex !important;
     flex-direction: column !important;
     z-index: 1000 !important;
@@ -989,11 +988,14 @@ function createChatButton(): void {
   
   // Create chat title
   const chatTitle = document.createElement('span');
-  chatTitle.textContent = 'Game Chat';
+  chatTitle.textContent = '☥ Game Chat ☥';
   chatTitle.style.cssText = `
     font-weight: bold !important;
     font-size: 16px !important;
-    color: #4CAF50 !important;
+    color:rgb(255, 254, 254) !important;
+    margin: 0 auto !important;
+    text-align: center !important;
+    font-family: 'Cinzel Decorative', 'Papyrus', 'Copperplate', fantasy !important;
   `;
   
   // Create minimize button
@@ -1002,12 +1004,28 @@ function createChatButton(): void {
   minimizeButton.style.cssText = `
     background: none !important;
     border: none !important;
-    color: white !important;
+    color: #d4af37 !important;
     cursor: pointer !important;
     font-size: 18px !important;
     padding: 0 5px !important;
     transition: color 0.2s !important;
+    font-weight: bold !important;
   `;
+  
+  // Add minimize button functionality
+  minimizeButton.addEventListener('click', () => {
+    if (messagesContainer.style.display !== 'none') {
+      messagesContainer.style.display = 'none';
+      inputContainer.style.display = 'none';
+      minimizeButton.textContent = '+';
+      chatContainer.style.height = 'auto';
+    } else {
+      messagesContainer.style.display = 'flex';
+      inputContainer.style.display = 'flex';
+      minimizeButton.textContent = '−';
+      chatContainer.style.height = '350px';
+    }
+  });
   
   // Add title and minimize button to header
   chatHeader.appendChild(chatTitle);
@@ -1063,7 +1081,6 @@ function createChatButton(): void {
     border: none !important;
     border-radius: 4px !important;
     background-color: #4CAF50 !important;
-    color: white !important;
     cursor: pointer !important;
     font-weight: bold !important;
     transition: background-color 0.3s, transform 0.2s !important;
@@ -1081,6 +1098,43 @@ function createChatButton(): void {
   // Add chat container to DOM
   document.body.appendChild(chatContainer);
   
+  // Add dragging functionality
+  let isDragging = false;
+  let offsetX = 0;
+  let offsetY = 0;
+  
+  chatHeader.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    offsetX = e.clientX - chatContainer.getBoundingClientRect().left;
+    offsetY = e.clientY - chatContainer.getBoundingClientRect().top;
+    
+    // Add temporary styles during drag
+    chatContainer.style.opacity = '0.8';
+    chatContainer.style.transition = 'none';
+  });
+  
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    
+    const x = e.clientX - offsetX;
+    const y = e.clientY - offsetY;
+    
+    // Keep the chat container within viewport bounds
+    const maxX = window.innerWidth - chatContainer.offsetWidth;
+    const maxY = window.innerHeight - chatContainer.offsetHeight;
+    
+    chatContainer.style.left = `${Math.max(0, Math.min(x, maxX))}px`;
+    chatContainer.style.top = `${Math.max(0, Math.min(y, maxY))}px`;
+  });
+  
+  document.addEventListener('mouseup', () => {
+    if (isDragging) {
+      isDragging = false;
+      chatContainer.style.opacity = '1';
+      chatContainer.style.transition = 'opacity 0.3s';
+    }
+  });
+  
   // Create a new button
   const chatButton = document.createElement('button');
   chatButton.className = 'chat-toggle';
@@ -1092,7 +1146,6 @@ function createChatButton(): void {
     right: 10px !important;
     padding: 8px 15px !important;
     background-color: #4CAF50 !important;
-    color: white !important;
     border: none !important;
     border-radius: 4px !important;
     cursor: pointer !important;

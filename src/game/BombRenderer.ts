@@ -3,6 +3,9 @@ import { h, render, VNode } from '../../framework/dom';
 import { Bomb } from '../entities/bomb';
 import { eventBus } from '../../framework/events';
 
+// Import TILE_SIZE constant
+const TILE_SIZE = 40; // Tile size in pixels
+
 export class BombRenderer {
   private explosionElements: Map<string, { 
     element: HTMLElement, 
@@ -106,25 +109,19 @@ export class BombRenderer {
     console.log('Creating bomb throw animation:', { playerX, playerY, bombX, bombY });
     
     // Calculate the start and end positions for the animation
-    // Add 20px offset to center on the player character (assuming player is 40x40px)
     const startX = playerX * 40 + 20;
     const startY = playerY * 40 + 20;
     const endX = bombX * 40 + 20;
     const endY = bombY * 40 + 20;
     
-    // Calculate the direction vector from player to bomb
-    const directionX = bombX - playerX;
-    const directionY = bombY - playerY;
+    // Calculate direction for animation
+    const directionX = endX - startX;
+    const directionY = endY - startY;
     
-    // Determine the predominant direction (where explosion will go)
-    // Explosions go in 4 directions: up, right, down, left
-    const absX = Math.abs(directionX);
-    const absY = Math.abs(directionY);
+    // Determine primary direction for animation styling
+    let primaryDirection = 'right';
     
-    // Determine which cardinal direction is closest to the player-bomb vector
-    let primaryDirection: 'up' | 'right' | 'down' | 'left';
-    
-    if (absX > absY) {
+    if (Math.abs(directionX) > Math.abs(directionY)) {
       // Horizontal movement is predominant
       primaryDirection = directionX > 0 ? 'right' : 'left';
     } else {
@@ -139,14 +136,61 @@ export class BombRenderer {
     const bombThrowId = `bomb-throw-${Date.now()}`;
     
     // Find player element to ensure animation starts from player's position
+    // First try to find by exact position
     const playerSelector = `.player[data-x="${Math.floor(playerX)}"][data-y="${Math.floor(playerY)}"]`;
     const altPlayerSelector = `.player[style*="left: ${Math.floor(startX - 20)}px"][style*="top: ${Math.floor(startY - 20)}px"]`;
     
     console.log('Looking for player element with selectors:', { playerSelector, altPlayerSelector });
     
-    const playerElement = document.querySelector(playerSelector) || 
-                          document.querySelector(altPlayerSelector) ||
-                          document.querySelector('.player');
+    // Get all player elements for more robust selection
+    const allPlayers = document.querySelectorAll('.player');
+    console.log(`Found ${allPlayers.length} total player elements`);
+    
+    // Get the local player ID from localStorage
+    const localPlayerId = localStorage.getItem('playerId');
+    
+    // Try to find the correct player element using multiple strategies
+    let playerElement: HTMLElement | null = null;
+    
+    // Strategy 1: Try by exact position selectors
+    const foundElement = document.querySelector(playerSelector) || document.querySelector(altPlayerSelector);
+    if (foundElement) {
+      playerElement = foundElement as HTMLElement;
+    }
+    
+    // Strategy 2: Find player by position on the grid
+    if (!playerElement) {
+      // Get all player elements
+      const playerElements = Array.from(allPlayers) as HTMLElement[];
+      
+      // Sort players by distance to the bomb's starting position
+      const sortedPlayers = playerElements.sort((a, b) => {
+        const aStyle = window.getComputedStyle(a);
+        const bStyle = window.getComputedStyle(b);
+        
+        const aLeft = parseInt(aStyle.left, 10) / TILE_SIZE || 0;
+        const aTop = parseInt(aStyle.top, 10) / TILE_SIZE || 0;
+        const bLeft = parseInt(bStyle.left, 10) / TILE_SIZE || 0;
+        const bTop = parseInt(bStyle.top, 10) / TILE_SIZE || 0;
+        
+        const aDistance = Math.sqrt(Math.pow(aLeft - playerX, 2) + Math.pow(aTop - playerY, 2));
+        const bDistance = Math.sqrt(Math.pow(bLeft - playerX, 2) + Math.pow(bTop - playerY, 2));
+        
+        return aDistance - bDistance;
+      });
+      
+      // Use the closest player
+      if (sortedPlayers.length > 0) {
+        playerElement = sortedPlayers[0];
+        console.log('Using closest player element by position:', playerElement.id);
+      }
+    }
+    
+    // Strategy 4: Last resort - use any player element
+    if (!playerElement && allPlayers.length > 0) {
+      playerElement = allPlayers[0] as HTMLElement;
+      console.log('Falling back to first player element:', playerElement.id);
+    }
     
     console.log('Player element found:', playerElement ? 'Yes' : 'No');
     
@@ -155,16 +199,22 @@ export class BombRenderer {
     let adjustedStartY = startY;
     
     if (playerElement) {
-      const playerRect = playerElement.getBoundingClientRect();
-      const gameContainerRect = this.gameContainer.getBoundingClientRect();
-      
-      // Calculate position relative to game container
-      adjustedStartX = playerRect.left - gameContainerRect.left + playerRect.width / 2;
-      adjustedStartY = playerRect.top - gameContainerRect.top + playerRect.height / 2;
-      console.log('Adjusted start position from player element:', { adjustedStartX, adjustedStartY });
+      try {
+        const playerRect = playerElement.getBoundingClientRect();
+        const gameContainerRect = this.gameContainer.getBoundingClientRect();
+        
+        // Calculate position relative to game container
+        adjustedStartX = playerRect.left - gameContainerRect.left + playerRect.width / 2;
+        adjustedStartY = playerRect.top - gameContainerRect.top + playerRect.height / 2;
+        console.log('Adjusted start position from player element:', { adjustedStartX, adjustedStartY });
+      } catch (error) {
+        console.error('Error getting player element position:', error);
+        // Fallback - use the center of the player's grid cell
+        console.log('Using fallback position for animation start due to error');
+      }
     } else {
       // Fallback - use the center of the player's grid cell
-      console.log('Using fallback position for animation start');
+      console.log('Using fallback position for animation start - no player element found');
     }
     
     // Create the bomb throw element using virtual DOM with direction-specific styling
@@ -331,11 +381,11 @@ export class BombRenderer {
   }
 
   // Handle bomb thrown event - creates a visible animation from player to bomb location
-  private handleBombThrown(data: { ownerId: string, playerX: number, playerY: number, bombX: number, bombY: number }): void {
+  private handleBombThrown(data: { ownerId: string, playerX: number, playerY: number, bombX: number, bombY: number, bombId?: string }): void {
     console.log('Bomb thrown event received:', data);
     
-    // Create a unique ID for this bomb to prevent duplicate animations
-    const bombId = `${data.ownerId}-${data.bombX}-${data.bombY}`;
+    // Use provided bombId if available, otherwise generate one
+    const bombId = data.bombId || `${data.ownerId}-${data.bombX}-${data.bombY}-${Date.now()}`;
     
     // Check if we've already animated this bomb
     if (this.animatedBombs.has(bombId)) {
@@ -343,8 +393,17 @@ export class BombRenderer {
       return;
     }
     
-    // Mark this bomb as animated
+    // Also check if we've animated a bomb at this position from this owner recently
+    // This helps prevent duplicates when bombId is inconsistent
+    const positionKey = `${data.ownerId}-${data.bombX}-${data.bombY}`;
+    if (this.animatedBombs.has(positionKey)) {
+      console.log('Skipping duplicate animation for bomb at position:', positionKey);
+      return;
+    }
+    
+    // Mark this bomb as animated using both IDs
     this.animatedBombs.add(bombId);
+    this.animatedBombs.add(positionKey);
     
     // Create the animation
     this.createBombThrowAnimation(data.playerX, data.playerY, data.bombX, data.bombY);
@@ -352,15 +411,16 @@ export class BombRenderer {
     // Clean up the tracking after a delay
     setTimeout(() => {
       this.animatedBombs.delete(bombId);
-    }, 2000); // Clean up after 2 seconds
+      this.animatedBombs.delete(positionKey);
+    }, 3000); // Extended cleanup time to prevent race conditions
   }
   
   // Handle bomb placed event - fallback for when bomb:thrown isn't triggered
-  private handleBombPlaced(data: { ownerId: string, x: number, y: number }): void {
+  private handleBombPlaced(data: { ownerId: string, x: number, y: number, bombId?: string }): void {
     console.log('Bomb placed event received:', data);
     
-    // Create a unique ID for this bomb to prevent duplicate animations
-    const bombId = `${data.ownerId}-${data.x}-${data.y}`;
+    // Use provided bombId if available, otherwise generate one
+    const bombId = data.bombId || `${data.ownerId}-${data.x}-${data.y}-${Date.now()}`;
     
     // Check if we've already animated this bomb
     if (this.animatedBombs.has(bombId)) {
@@ -368,15 +428,65 @@ export class BombRenderer {
       return;
     }
     
-    // Mark this bomb as animated
+    // Also check if we've animated a bomb at this position from this owner recently
+    // This helps prevent duplicates when bombId is inconsistent
+    const positionKey = `${data.ownerId}-${data.x}-${data.y}`;
+    if (this.animatedBombs.has(positionKey)) {
+      console.log('Skipping duplicate animation for bomb at position:', positionKey);
+      return;
+    }
+    
+    // Mark this bomb as animated using both IDs
     this.animatedBombs.add(bombId);
+    this.animatedBombs.add(positionKey);
     
     // We need to find the player position since it's not included in the bomb:placed event
     // Player elements have ID format 'player-{id}' based on the player.ts implementation
-    const playerElement = document.getElementById(`player-${data.ownerId}`) || document.querySelector('.player');
     console.log('Looking for player element with ID:', `player-${data.ownerId}`);
+    
+    // Try to find the player element by owner ID
+    let playerElement = document.getElementById(`player-${data.ownerId}`);
+    
+    // If not found, try to find by player number or any other identifier
+    if (!playerElement) {
+      // Get all player elements
+      const allPlayers = document.querySelectorAll('.player');
+      console.log(`Found ${allPlayers.length} player elements`);
+      
+      // Get the local player ID and number
+      const localPlayerId = localStorage.getItem('playerId');
+      const localPlayerNumber = parseInt(localStorage.getItem('playerNumber') || '1');
+      
+      // If this is our own bomb, use our own player element
+      if (data.ownerId === localPlayerId) {
+        playerElement = document.querySelector(`.player[id$="${localPlayerId}"]`) as HTMLElement;
+        console.log('Using local player element for our own bomb');
+      }
+      // Otherwise, try to find the correct remote player
+      else {
+        // Try each player element to find one that's not the local player
+        allPlayers.forEach((el, index) => {
+          const elId = el.id;
+          console.log(`Player element ${index}: ${elId}`);
+          
+          // If this is not our player, use it for the remote bomb
+          if (elId !== `player-${localPlayerId}`) {
+            playerElement = el as HTMLElement;
+            console.log(`Using remote player element: ${elId}`);
+          }
+        });
+      }
+      
+      // Last resort: use any player element
+      if (!playerElement && allPlayers.length > 0) {
+        playerElement = allPlayers[0] as HTMLElement;
+        console.log('Falling back to first player element');
+      }
+    }
+    
     console.log('Found player element:', playerElement);
     
+    // Default to bomb position if we can't find player position
     let playerX = data.x;
     let playerY = data.y;
     
@@ -405,7 +515,8 @@ export class BombRenderer {
     // Clean up the tracking after a delay
     setTimeout(() => {
       this.animatedBombs.delete(bombId);
-    }, 2000); // Clean up after 2 seconds
+      this.animatedBombs.delete(positionKey);
+    }, 3000); // Extended cleanup time to prevent race conditions
   }
 
   // Handle bomb explosion event

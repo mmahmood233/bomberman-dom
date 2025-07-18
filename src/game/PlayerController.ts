@@ -94,8 +94,8 @@ export class PlayerController {
         up: ['ArrowUp', 'w', 'W'],
         right: ['ArrowRight', 'd', 'D'],
         down: ['ArrowDown', 's', 'S'],
-        left: ['ArrowLeft', 'a', 'A'],
-        bomb: [' '] // Space
+        left: ['ArrowLeft'],
+        bomb: ['a'] // A key
       },
       'player2': {
         up: ['w', 'W'],

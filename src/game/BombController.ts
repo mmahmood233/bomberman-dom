@@ -34,33 +34,53 @@ export class BombController {
 
   // Set up keyboard event listeners for bomb placement
   private setupKeyboardListeners(): void {
-    // Map of player IDs to their bomb placement keys
-    const playerBombKeys: Record<string, string> = {
-      'player1': ' ',     // Space bar for player 1
-      'player2': 'Enter', // Enter for player 2
-      'player3': 'r',     // R key for player 3
-      'player4': '0'      // 0 key for player 4 (numpad)
+    // Map keys to player numbers
+    const keyToPlayerNumber: Record<string, string> = {
+      'a': '1',     // A key for player 1
+      'Enter': '2', // Enter for player 2
+      'r': '3',     // R key for player 3
+      '0': '4'      // 0 key for player 4 (numpad)
     };
     
     // Handle keydown events
     window.addEventListener('keydown', (event) => {
-      // Check if this key is a bomb placement key for any player
-      Object.entries(playerBombKeys).forEach(([playerId, key]) => {
-        if (event.key === key) {
-          this.keyStates.set(playerId, true);
-          this.tryPlaceBomb(playerId);
+      // Check if this key is a bomb placement key
+      if (Object.keys(keyToPlayerNumber).includes(event.key)) {
+        // Get the local player ID and number from localStorage
+        const localPlayerId = localStorage.getItem('playerId');
+        const localPlayerNumber = localStorage.getItem('playerNumber');
+        
+        if (!localPlayerId || !localPlayerNumber) {
+          console.warn('Local player ID or number not found in localStorage');
+          return;
         }
-      });
+        
+        // Check if the pressed key corresponds to the local player's number
+        if (keyToPlayerNumber[event.key] === localPlayerNumber) {
+          console.log(`Local player ${localPlayerNumber} (ID: ${localPlayerId}) pressed bomb key`);
+          this.keyStates.set(localPlayerId, true);
+          this.tryPlaceBomb(localPlayerId);
+        }
+      }
     });
     
     // Handle keyup events
     window.addEventListener('keyup', (event) => {
-      // Check if this key is a bomb placement key for any player
-      Object.entries(playerBombKeys).forEach(([playerId, key]) => {
-        if (event.key === key) {
-          this.keyStates.set(playerId, false);
+      // Check if this key is a bomb placement key
+      if (Object.keys(keyToPlayerNumber).includes(event.key)) {
+        // Get the local player ID and number from localStorage
+        const localPlayerId = localStorage.getItem('playerId');
+        const localPlayerNumber = localStorage.getItem('playerNumber');
+        
+        if (!localPlayerId || !localPlayerNumber) {
+          return;
         }
-      });
+        
+        // Check if the released key corresponds to the local player's number
+        if (keyToPlayerNumber[event.key] === localPlayerNumber) {
+          this.keyStates.set(localPlayerId, false);
+        }
+      }
     });
   }
 
@@ -76,7 +96,10 @@ export class BombController {
     
     // Get player position
     const position = this.playerPositions.get(playerId);
-    if (!position) return;
+    if (!position) {
+      console.warn(`No position found for player ${playerId}`);
+      return;
+    }
     
     // Round position to grid coordinates
     const gridX = Math.floor(position.x);
@@ -89,13 +112,20 @@ export class BombController {
       Math.floor(bomb.y) === gridY
     );
     
-    if (bombAtPosition) return; // Can't place bomb where one already exists
+    if (bombAtPosition) {
+      console.log('Cannot place bomb: position already occupied');
+      return; // Can't place bomb where one already exists
+    }
+    
+    // Generate a unique bomb ID using coordinates and owner ID
+    const bombId = `${playerId}-${gridX}-${gridY}-${Date.now()}`;
     
     // Try to place the bomb
     const success = this.bombManager.placeBomb({
       ownerId: playerId,
       x: gridX,
-      y: gridY
+      y: gridY,
+      bombId: bombId
     });
     
     if (success) {
@@ -103,8 +133,7 @@ export class BombController {
       this.bombCooldowns.set(playerId, currentTime);
       
       // Debug log player position
-      console.log('Player position for bomb throw:', position);
-      console.log('Bomb grid position:', { gridX, gridY });
+      console.log(`Player ${playerId} placed bomb at position:`, { gridX, gridY });
       
       // Emit bomb:thrown event with player and bomb positions
       const eventData = {
@@ -112,15 +141,12 @@ export class BombController {
         playerX: position.x,
         playerY: position.y,
         bombX: gridX,
-        bombY: gridY
+        bombY: gridY,
+        bombId: bombId
       };
       
       console.log('Emitting bomb:thrown event with data:', eventData);
       eventBus.emit('bomb:thrown', eventData);
-      
-      // Also emit a DOM event for testing
-      const customEvent = new CustomEvent('bomb:thrown', { detail: eventData });
-      window.dispatchEvent(customEvent);
       
       // Play bomb placement sound
       this.playBombPlacementSound();

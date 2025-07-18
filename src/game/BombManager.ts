@@ -7,6 +7,7 @@ interface BombPlacementOptions {
   x: number;
   y: number;
   explosionRange?: number;
+  bombId?: string; // Unique identifier for the bomb
 }
 
 interface PlayerBombStats {
@@ -46,7 +47,7 @@ export class BombManager {
   }
 
   // Place a bomb if the player hasn't reached their limit
-  public placeBomb({ ownerId, x, y, explosionRange }: BombPlacementOptions): boolean {
+  public placeBomb({ ownerId, x, y, explosionRange, bombId }: BombPlacementOptions): boolean {
     const playerStats = this.playerStats.get(ownerId);
     if (!playerStats) return false;
     
@@ -60,7 +61,8 @@ export class BombManager {
       ownerId, 
       x, 
       y, 
-      explosionRange || playerStats.explosionRange
+      explosionRange || playerStats.explosionRange,
+      bombId
     );
     
     const playerBombs = this.bombs.get(ownerId) || [];
@@ -72,7 +74,7 @@ export class BombManager {
     this.playerStats.set(ownerId, playerStats);
     
     // Emit event for bomb placement
-    const bombPlacedData = { ownerId, x, y };
+    const bombPlacedData = { ownerId, x, y, bombId: bomb.id };
     console.log('Emitting bomb:placed event:', bombPlacedData);
     eventBus.emit('bomb:placed', bombPlacedData);
     

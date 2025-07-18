@@ -78,3 +78,11 @@ export interface LobbyData {
   maxPlayers: number;
   gameInProgress: boolean;
 }
+
+export interface ChatEventData {
+  playerId: string;
+  nickname: string;
+  message: string;
+  timestamp: number;
+  playerNumber?: number;
+}

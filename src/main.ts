@@ -14,12 +14,24 @@ import { initEgyptTheme } from './ui/egyptTheme';
 // Import Egyptian theme CSS
 import './styles/egypt.css';
 
+// Egyptian chat theme CSS is loaded via a link element in the document head
+// This is done in the DOMContentLoaded event below
+
 // Connection state
 let isConnected = false;
 let playerId: string | null = null;
 let socket: any = null;
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Load Egyptian chat theme CSS
+  const linkElement = document.createElement('link');
+  linkElement.rel = 'stylesheet';
+  linkElement.href = '/egyptian-chat-theme.css';
+  document.head.appendChild(linkElement);
+  
+  // Initialize Egyptian theme
+  initEgyptTheme(document.body);
+  
   // Clear any existing content to prevent old styles from appearing
   const app = document.getElementById('app');
   if (app) {
@@ -107,15 +119,12 @@ async function initializeMultiplayer(nickname: string) {
     // Initialize chat with player nickname
     initChat(nickname);
     
-    // Initialize chat UI but keep the button hidden until player joins the lobby
+    // Initialize chat UI but only after the player joins the game, not on login screen
     const gameContainer = document.getElementById('app');
     if (gameContainer) {
-      // Initialize chat UI (button will be hidden by default)
-      initChatUI(gameContainer);
-      
-      // Note: We don't make the button visible here anymore
-      // The button will be shown in the lobby.ts file after the player joins
-      console.log('Chat UI initialized, button will be shown after joining lobby');
+      // We'll initialize the chat UI in the lobby.ts file after the player joins
+      // NOT initializing chat UI here to prevent it from appearing on login screen
+      console.log('Chat UI will be initialized after joining lobby');
     }
     
     // Add system message

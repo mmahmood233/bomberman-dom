@@ -11,13 +11,18 @@ export class Bomb {
   private explosionRange: number = 1; // Default explosion range
   private exploded: boolean = false;
   private explosionTimer: number | null = null;
+  public id: string; // Unique identifier for the bomb
   
   constructor(
     public ownerId: string, 
     public x: number, 
     public y: number,
-    explosionRange?: number
+    explosionRange?: number,
+    bombId?: string
   ) {
+    // Generate a unique ID if none provided
+    this.id = bombId || `${ownerId}-${x}-${y}-${Date.now()}`;
+    
     // Set custom explosion range if provided
     if (explosionRange) {
       this.explosionRange = explosionRange;
